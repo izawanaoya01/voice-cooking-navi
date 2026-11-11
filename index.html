@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>しゃべる料理ナビ 試作</title>
+<style>
+  :root {
+    --bg: #faf8f5; --card: #ffffff; --ink: #1d1b19; --sub: #6b655e; --line: #e6e1da;
+    --accent: #d2601a; --accent-soft: #fbe9dd; --ok: #2f7d4f; --ok-soft: #e2f2e8;
+    --warn: #b3261e; --warn-soft: #fbe3e1; --chip: #f1ede7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171513; --card: #221f1c; --ink: #f3efe9; --sub: #a9a198; --line: #3a352f;
+      --accent: #f08a45; --accent-soft: #3d281a; --ok: #6cc28f; --ok-soft: #1d3326;
+      --warn: #f2867d; --warn-soft: #3d1f1c; --chip: #2d2925;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); -webkit-tap-highlight-color: transparent;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .app { max-width: 720px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 14px 18px 8px;
+  }
+  header h1 { font-size: 17px; margin: 0; flex: 1; }
+  .count { color: var(--sub); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .iconbtn {
+    border: 1px solid var(--line); background: var(--card); border-radius: 10px;
+    padding: 6px 10px; font-size: 13px; color: var(--sub);
+  }
+  .progress { height: 6px; background: var(--line); border-radius: 3px; margin: 0 18px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+
+  .timers { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 18px 0; min-height: 0; }
+  .tchip {
+    display: flex; align-items: center; gap: 8px; border-radius: 999px; padding: 6px 8px 6px 14px;
+    background: var(--chip); font-size: 15px; font-variant-numeric: tabular-nums;
+  }
+  .tchip.ringing { background: var(--warn-soft); color: var(--warn); animation: pulse 1s infinite; }
+  .tchip button { border: 0; background: transparent; font-size: 13px; color: var(--sub); padding: 2px 6px; }
+  @keyframes pulse { 50% { opacity: .55; } }
+
+  main { flex: 1; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+  .step-main { font-size: clamp(30px, 8.5vw, 52px); font-weight: 700; line-height: 1.3; letter-spacing: .01em; }
+  .step-main .amt { color: var(--accent); }
+  .step-sub { font-size: 18px; color: var(--sub); line-height: 1.5; }
+  .tip {
+    background: var(--chip); border-radius: 12px; padding: 12px 14px; font-size: 17px; line-height: 1.6;
+  }
+  .tip b { display: block; font-size: 13px; color: var(--sub); margin-bottom: 2px; }
+  .timercard {
+    border: 2px solid var(--accent); background: var(--accent-soft); border-radius: 14px;
+    padding: 14px; display: flex; align-items: center; gap: 16px;
+  }
+  .timercard .big { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .timercard .hint { font-size: 15px; color: var(--sub); flex: 1; }
+  .timercard button {
+    border: 0; background: var(--accent); color: #fff; border-radius: 10px; padding: 12px 14px; font-size: 15px;
+  }
+  .next { font-size: 15px; color: var(--sub); }
+
+  .navbar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 18px 10px; }
+  .navbar button {
+    border: 1px solid var(--line); background: var(--card); border-radius: 16px;
+    padding: 22px 10px; font-size: 20px; font-weight: 600;
+  }
+  .navbar button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .subnav { display: flex; gap: 8px; padding: 0 18px 10px; }
+  .subnav button {
+    flex: 1; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 10px 6px;
+    font-size: 14px;
+  }
+
+  .bottom { position: sticky; bottom: 0; background: var(--bg); padding-top: 8px; padding-bottom: env(safe-area-inset-bottom); }
+  .mic {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 18px 14px;
+    border-top: 1px solid var(--line); background: var(--card);
+  }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--sub); flex: none; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: breathe 1.6s infinite; }
+  .dot.busy { background: var(--accent); }
+  @keyframes breathe { 0% { box-shadow: 0 0 0 0 rgba(47,125,79,.45); } 70% { box-shadow: 0 0 0 10px rgba(47,125,79,0); } 100% { box-shadow: 0 0 0 0 rgba(47,125,79,0); } }
+  .mic .state { font-weight: 600; font-size: 15px; }
+  .mic .words { font-size: 13px; color: var(--sub); }
+  .mic .grow { flex: 1 1 180px; min-width: 0; }
+  .heard {
+    font-size: 15px; padding: 6px 10px; border-radius: 8px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; order: 3; flex-basis: 100%; opacity: 0; transition: opacity .2s;
+  }
+  .heard.show { opacity: 1; }
+  .heard.hit { background: var(--ok-soft); color: var(--ok); }
+  .heard.miss { background: var(--chip); color: var(--sub); }
+
+  /* prep / done */
+  .list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
+  .list li { display: flex; gap: 12px; align-items: center; padding: 12px 2px; border-bottom: 1px solid var(--line); font-size: 18px; }
+  .list li .amt { margin-left: auto; color: var(--sub); }
+  .list li.hl { background: var(--accent-soft); }
+  .list input { width: 22px; height: 22px; accent-color: var(--accent); }
+  .lead { font-size: 17px; line-height: 1.7; color: var(--sub); margin: 0; }
+  .start {
+    border: 0; background: var(--accent); color: #fff; border-radius: 16px; padding: 20px; font-size: 20px; font-weight: 700;
+  }
+  .cmdtable { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .cmdtable td { padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  .cmdtable td:first-child { font-weight: 700; white-space: nowrap; }
+  .settings { display: grid; gap: 12px; font-size: 15px; }
+  .settings label { display: flex; align-items: center; gap: 10px; }
+  .settings input[type=range] { flex: 1; accent-color: var(--accent); }
+  h2 { font-size: 16px; margin: 6px 0 0; }
+  .note { font-size: 13px; color: var(--sub); line-height: 1.6; }
+  .warnbox { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.6; }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .stat .v { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: 13px; color: var(--sub); }
+
+  /* sheets */
+  .sheet {
+    position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-end; justify-content: center; z-index: 10;
+  }
+  .sheet.open { display: flex; }
+  .sheet .panel {
+    background: var(--bg); width: 100%; max-width: 720px; max-height: 85vh; overflow: auto; border-radius: 18px 18px 0 0;
+    padding: 16px 18px 24px; display: grid; gap: 12px;
+  }
+  .sheet .panel header { padding: 0; }
+  .log { font-size: 13px; font-family: ui-monospace, Menlo, monospace; display: grid; gap: 2px; }
+  .log div { display: grid; grid-template-columns: 64px 1fr auto; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .log .hit { color: var(--ok); }
+  .log .miss { color: var(--sub); }
+  .sim { display: flex; gap: 8px; }
+  .sim input { flex: 1; font-size: 16px; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .sim button, .row button { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <h1 id="title">肉じゃが</h1>
+    <span class="count" id="count"></span>
+    <button class="iconbtn" id="btnLog" type="button">検証ログ</button>
+  </header>
+  <div class="progress" id="progressWrap"><div id="progress"></div></div>
+  <div class="timers" id="timers"></div>
+
+  <!-- 準備画面 -->
+  <main id="viewPrep">
+    <p class="lead">スマホを立てて置き、「調理をはじめる」を押してください。そこから先は声だけで進められます。</p>
+    <div class="warnbox hidden" id="envWarn"></div>
+    <h2>材料（2人分）</h2>
+    <ul class="list" id="prepList"></ul>
+    <h2>使える言葉</h2>
+    <table class="cmdtable" id="cmdTable"></table>
+    <h2>設定</h2>
+    <div class="settings">
+      <label><input type="checkbox" id="optHai" checked>「はい」で進む（オフにすると「つぎ」だけで進む）</label>
+      <label><input type="checkbox" id="optSpeak" checked>手順を読み上げる</label>
+      <label>読む速さ <input type="range" id="optRate" min="0.7" max="1.4" step="0.1" value="1.0"><span id="rateVal">1.0</span></label>
+    </div>
+    <button class="start" id="btnStart" type="button">調理をはじめる（マイクON）</button>
+    <p class="note">声が使えない環境でも、下の大きなボタンで同じように進められます。画面タッチの回数と声の認識結果は「検証ログ」に記録されます。</p>
+  </main>
+
+  <!-- 調理画面 -->
+  <main id="viewCook" class="hidden">
+    <div class="step-main" id="stepMain"></div>
+    <div class="step-sub" id="stepSub"></div>
+    <div class="tip hidden" id="tipBox"><b>くわしく</b><span id="tipText"></span></div>
+    <div class="timercard hidden" id="timerCard">
+      <div class="big" id="timerBig"></div>
+      <div class="hint" id="timerHint"></div>
+      <button type="button" id="btnTimer">開始</button>
+    </div>
+    <div class="next" id="nextText"></div>
+  </main>
+
+  <!-- 完成画面 -->
+  <main id="viewDone" class="hidden">
+    <div class="step-main">完成です</div>
+    <p class="lead">おつかれさまでした。今回の記録です。</p>
+    <div class="stats" id="stats"></div>
+    <div class="row">
+      <button type="button" id="btnCopyDone">記録をコピー</button>
+      <button type="button" id="btnAgain">最初から</button>
+    </div>
+  </main>
+
+  <div class="bottom">
+  <div id="cookControls" class="hidden">
+    <div class="subnav">
+      <button type="button" data-cmd="repeat">もういちど</button>
+      <button type="button" data-cmd="ingredients">ざいりょう</button>
+      <button type="button" data-cmd="detail" id="btnDetail">くわしく</button>
+    </div>
+    <div class="navbar">
+      <button type="button" data-cmd="back">◀ もどって</button>
+      <button type="button" data-cmd="next" class="primary" id="btnNext">はい ▶</button>
+    </div>
+  </div>
+
+  <div class="mic">
+    <span class="dot" id="micDot"></span>
+    <div class="grow">
+      <div class="state" id="micState">マイクはまだオフです</div>
+      <div class="words" id="micWords">はい・もどって・もういちど・タイマーオン</div>
+    </div>
+    <div class="heard" id="heard"></div>
+    <button class="iconbtn hidden" id="btnMicRetry" type="button">マイク再開</button>
+  </div>
+  </div>
+</div>
+
+<!-- 材料シート -->
+<div class="sheet" id="sheetIng">
+  <div class="panel">
+    <header><h1>材料（2人分）</h1><button class="iconbtn" type="button" data-close="sheetIng">閉じる</button></header>
+    <p class="note">色の付いた行が、今の手順で使う材料です。「はい」か「もどって」で手順に戻ります。</p>
+    <ul class="list" id="ingList"></ul>
+  </div>
+</div>
+
+<!-- 検証ログシート -->
+<div class="sheet" id="sheetLog">
+  <div class="panel">
+    <header><h1>検証ログ</h1><button class="iconbtn" type="button" data-close="sheetLog">閉じる</button></header>
+    <div class="stats" id="logStats"></div>
+    <div class="note" id="engineInfo"></div>
+    <div class="sim">
+      <input id="simInput" placeholder="文字で試す（例: 戻って）" enterkeyhint="send">
+      <button type="button" id="btnSim">送る</button>
+    </div>
+    <div class="row">
+      <button type="button" id="btnCopyLog">ログをコピー</button>
+      <button type="button" id="btnResetLog">記録をリセット</button>
+    </div>
+    <div class="log" id="logList"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- レシピ（1ステップ＝1動作） ----------
+  const RECIPE = {
+    title: '肉じゃが',
+    servings: 2,
+    ingredients: [
+      { id: 'beef', name: '牛こま切れ肉', amount: '150g' },
+      { id: 'potato', name: 'じゃがいも', amount: '3個' },
+      { id: 'onion', name: '玉ねぎ', amount: '1個' },
+      { id: 'carrot', name: 'にんじん', amount: '1/2本' },
+      { id: 'snow', name: '絹さや', amount: '6枚' },
+      { id: 'oil', name: 'サラダ油', amount: '大さじ1' },
+      { id: 'water', name: '水', amount: '200ml' },
+      { id: 'sugar', name: '砂糖', amount: '大さじ2' },
+      { id: 'mirin', name: 'みりん', amount: '大さじ2' },
+      { id: 'soy', name: 'しょうゆ', amount: '大さじ2と1/2' },
+    ],
+    steps: [
+      { display: 'じゃがいも<span class="amt">3個</span>の皮をむく', speech: 'じゃがいも3個の皮をむきます。', uses: ['potato'],
+        tip: '芽が出ている所は、包丁の角でえぐり取ります。' },
+      { display: 'じゃがいもをひと口大に切る', speech: 'じゃがいもを、ひと口大に切ります。', uses: ['potato'],
+        sub: '1個を4〜6等分が目安', tip: '切ったら水にさらしておくと、煮くずれしにくくなります。' },
+      { display: '玉ねぎ<span class="amt">1個</span>をくし形に切る', speech: '玉ねぎ1個を、くし形に切ります。', uses: ['onion'],
+        sub: '8等分くらい' },
+      { display: 'にんじん<span class="amt">1/2本</span>を乱切りにする', speech: 'にんじん半分を、乱切りにします。', uses: ['carrot'],
+        tip: 'にんじんを回しながら、斜めに切っていきます。じゃがいもより少し小さめにすると、火の通りがそろいます。' },
+      { display: '鍋にサラダ油<span class="amt">大さじ1</span>を入れ、中火で温める', speech: '鍋にサラダ油、大さじ1を入れて、中火で温めます。', uses: ['oil'] },
+      { display: '牛肉<span class="amt">150g</span>を炒める', speech: '牛肉150グラムを炒めます。色が変わったら次へ進みます。', uses: ['beef'],
+        sub: '肉の色が変わるまで' },
+      { display: 'じゃがいも・玉ねぎ・にんじんを加えて炒める', speech: 'じゃがいも、玉ねぎ、にんじんを加えて、2分ほど炒めます。タイマーを使うときは、タイマーオンと言ってください。',
+        uses: ['potato', 'onion', 'carrot'], sub: '油が全体に回るまで',
+        timer: { seconds: 120, label: '炒め', doneHint: '油が全体に回っていれば、次へ進みましょう。' } },
+      { display: '水<span class="amt">200ml</span>、砂糖・みりん<span class="amt">各大さじ2</span>、しょうゆ<span class="amt">大さじ2と1/2</span>を入れる',
+        speech: '水200ミリリットル、砂糖大さじ2、みりん大さじ2、しょうゆ大さじ2と半分を入れます。', uses: ['water', 'sugar', 'mirin', 'soy'],
+        tip: '計量スプーンは、砂糖、みりん、しょうゆの順に使うと、洗わずに済みます。' },
+      { display: '煮立ったらアクをとる', speech: '煮立ったら、表面に浮いたアクをお玉でとります。', uses: [],
+        sub: '強火にして煮立たせる' },
+      { display: '落としぶたをして中火で10分煮る', speech: '落としぶたをして、中火で10分煮ます。タイマーを使うときは、タイマーオンと言ってください。', uses: [],
+        sub: '煮ている間に次の手順へ進めます',
+        timer: { seconds: 600, label: '煮込み', doneHint: '煮汁が半分くらいになっていれば、次へ進みましょう。' },
+        tip: '落としぶたがなければ、アルミホイルを鍋の大きさに丸く切り、真ん中に穴をあけて使えます。' },
+      { display: 'その間に、絹さや<span class="amt">6枚</span>の筋をとる', speech: '煮ている間に、絹さや6枚の筋をとります。', uses: ['snow'],
+        tip: 'へたの部分を折り、そのまま筋を引っぱってとります。' },
+      { display: '絹さやを加えて2分煮る', speech: '煮込みが終わったら、絹さやを加えて2分煮ます。タイマーを使うときは、タイマーオンと言ってください。', uses: ['snow'],
+        timer: { seconds: 120, label: '絹さや', doneHint: '絹さやが鮮やかな緑色になっていれば、次へ進みましょう。' } },
+      { display: '火を止めて5分おく', speech: '火を止めて、そのまま5分おきます。冷めるときに味がしみ込みます。タイマーを使うときは、タイマーオンと言ってください。', uses: [],
+        timer: { seconds: 300, label: '味しみ', doneHint: 'できあがりです。最後に、はい、と言ってください。' } },
+    ],
+  };
+
+  // ---------- 状態 ----------
+  const S = {
+    view: 'prep', step: 0, sheet: null, tipShown: false,
+    timers: [], // {id, step, label, total, endAt, state:'running'|'ringing'|'done', warned}
+    speaking: false, speakEndAt: 0,
+    micOn: false, engine: 'none',
+    stats: { voiceHit: 0, voiceMiss: 0, taps: 0, startedAt: 0, endedAt: 0 },
+    log: [],
+  };
+  const OPT = { hai: true, speak: true, rate: 1.0 };
+  try { Object.assign(OPT, JSON.parse(localStorage.getItem('cooknavi-opt') || '{}')); } catch (e) {}
+  const saveOpt = () => { try { localStorage.setItem('cooknavi-opt', JSON.stringify(OPT)); } catch (e) {} };
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = (sec) => { sec = Math.max(0, Math.ceil(sec)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; };
+  const plain = (html) => html.replace(/<[^>]+>/g, '');
+
+  // ---------- 効果音・アラーム ----------
+  let actx = null;
+  function audio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === 'suspended') actx.resume().catch(() => {});
+    return actx;
+  }
+  function tone(freq, start, dur, vol = 0.18) {
+    const a = audio(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, a.currentTime + start);
+    g.gain.exponentialRampToValueAtTime(vol, a.currentTime + start + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + start + dur);
+    o.connect(g).connect(a.destination); o.start(a.currentTime + start); o.stop(a.currentTime + start + dur + 0.02);
+  }
+  const chimeOk = () => { tone(880, 0, 0.12); tone(1320, 0.1, 0.16); };
+  const chimeNo = () => { tone(330, 0, 0.14, 0.12); };
+  const alarmBurst = () => { tone(1046, 0, 0.18, 0.3); tone(1046, 0.25, 0.18, 0.3); tone(1046, 0.5, 0.18, 0.3); };
+
+  // ---------- 読み上げ ----------
+  let jaVoice = null;
+  function pickVoice() {
+    if (!('speechSynthesis' in window)) return;
+    const vs = speechSynthesis.getVoices();
+    jaVoice = vs.find(v => /ja[-_]JP/i.test(v.lang) && /Kyoko|O-ren|Google/i.test(v.name)) || vs.find(v => /^ja/i.test(v.lang)) || null;
+  }
+  if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+
+  function speak(text, force = false) {
+    if (!text || !('speechSynthesis' in window)) return;
+    if (!OPT.speak && !force) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ja-JP'; u.rate = OPT.rate; if (jaVoice) u.voice = jaVoice;
+    // 読み上げの声を自分で拾わないよう、話している間は聞き取りを制限する
+    pauseMicForSpeech();
+    S.speaking = true;
+    S.speakEndAt = Date.now() + 800; // 話し始めるまでの間も守る
+    u.onend = u.onerror = () => { S.speaking = false; S.speakEndAt = Date.now(); renderMic(); };
+    speechSynthesis.speak(u);
+    renderMic();
+  }
+  function stopSpeaking() { if ('speechSynthesis' in window) speechSynthesis.cancel(); S.speaking = false; S.speakEndAt = Date.now(); renderMic(); }
+  // 読み上げ中＋終わってから0.6秒は「話している」とみなす（onend が来ない端末もあるので speechSynthesis.speaking を正とする）
+  const isSpeaking = () => ('speechSynthesis' in window && speechSynthesis.speaking) || Date.now() < S.speakEndAt + 600;
+
+  // ---------- 音声認識 ----------
+  const NativeSR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let rec = null, dict = null, wantMic = false, restartTimer = null;
+
+  // claude.ai のアーティファクト内ではブラウザのマイクが使えないため、用意されていれば dictation を使う
+  if (window.claude && typeof window.claude.use === 'function') {
+    window.claude.use('dictation').then(d => {
+      dict = d;
+      if (d) {
+        d.onFinal(({ text }) => onHeard(text, 'final'));
+        d.onState(({ state, reason }) => {
+          S.micOn = state === 'listening';
+          if (!S.micOn && wantMic) $('btnMicRetry').classList.remove('hidden');
+          if (S.micOn) $('btnMicRetry').classList.add('hidden');
+          renderMic(reason);
+        });
+      }
+      renderEnv();
+    }).catch(() => renderEnv());
+  }
+
+  function startMic() {
+    wantMic = true;
+    if (dict) {
+      S.engine = 'claude-dictation';
+      dict.start().catch(err => { S.micOn = false; renderMic(err && (err.code || err.message)); $('btnMicRetry').classList.remove('hidden'); });
+      return;
+    }
+    if (!NativeSR) { S.engine = 'none'; renderMic('この環境は音声認識に未対応です'); renderEnv(); return; }
+    S.engine = IS_IOS ? 'web-speech-ios' : 'web-speech';
+    failCount = 0;
+    listenNow();
+  }
+
+  // iPhoneのSafariは連続認識が止まったり固まったりしやすいので、
+  // 「1回聞いたら終わる」認識を毎回作り直して繋ぐ。読み上げ中はマイクを止めて音声の取り合いを避ける。
+  let watchdog = null, failCount = 0, gotResult = false;
+  function makeRec() {
+    const r = new NativeSR();
+    r.lang = 'ja-JP'; r.continuous = !IS_IOS; r.interimResults = false; r.maxAlternatives = 3;
+    r.onstart = () => { S.micOn = true; $('btnMicRetry').classList.add('hidden'); renderMic(); };
+    r.onresult = (ev) => {
+      gotResult = true; failCount = 0;
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const res = ev.results[i];
+        if (!res.isFinal) continue;
+        const alts = Array.from(res).map(a => a.transcript);
+        onHeard(alts[0], 'final', alts);
+      }
+    };
+    r.onerror = (ev) => {
+      S.lastErr = ev.error;
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+        wantMic = false; S.micOn = false;
+        renderMic('マイクが許可されていません'); $('btnMicRetry').classList.remove('hidden');
+      } else if (ev.error !== 'no-speech' && ev.error !== 'aborted') {
+        failCount++;
+      }
+    };
+    r.onend = () => {
+      S.micOn = false; clearTimeout(watchdog); renderMic();
+      if (!wantMic) return;
+      if (failCount >= 5) { // 何度も失敗するときは自動再開をやめ、タップを求める
+        wantMic = false; renderMic('自動で再開できませんでした'); $('btnMicRetry').classList.remove('hidden'); return;
+      }
+      scheduleRestart(IS_IOS ? 250 : 300);
+    };
+    return r;
+  }
+  let waitSince = 0;
+  function scheduleRestart(delay) {
+    clearTimeout(restartTimer);
+    restartTimer = setTimeout(() => {
+      if (!wantMic) return;
+      // 読み上げが終わるまで待つ（終了通知が来ない端末に備えて最大20秒）
+      if (IS_IOS && isSpeaking()) {
+        if (!waitSince) waitSince = Date.now();
+        if (Date.now() - waitSince < 20000) { scheduleRestart(300); return; }
+      }
+      waitSince = 0;
+      listenNow();
+    }, delay);
+  }
+  function listenNow() {
+    if (IS_IOS || !rec) rec = makeRec();
+    gotResult = false;
+    try { rec.start(); } catch (e) { failCount++; scheduleRestart(800); return; }
+    if (IS_IOS) { // 結果も終了も来ないまま固まったら作り直す
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => { try { rec.abort(); } catch (e) {} setTimeout(() => { if (wantMic && !S.micOn) listenNow(); }, 600); }, 12000);
+    }
+  }
+  function pauseMicForSpeech() {
+    if (IS_IOS && rec && S.engine === 'web-speech-ios') { try { rec.abort(); } catch (e) {} }
+  }
+
+  // ---------- 言葉の判定 ----------
+  function norm(s) {
+    return (s || '').normalize('NFKC').toLowerCase()
+      .replace(/[\s、。．，,.!！?？「」『』・]/g, '')
+      .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60)) // カタカナ→ひらがな
+      .replace(/(です|ください|下さい|ね|よ)$/, '');
+  }
+  const RULES = [
+    ['timerStop', /たいまー(を)?(止め|とめ|すとっぷ|停止|ていし|おふ|off|消し|けし)|^(すとっぷ|止めて|とめて|止めろ)$/],
+    ['remaining', /(残り|のこり|あと何分|あとなんぷん|あとなんふん|何分)/],
+    ['timerOn', /たいまー/],
+    ['repeat', /(もう一度|もう1度|もういちど|もう一回|もう1回|もういっかい|もう一遍|繰り返|くりかえ)/],
+    ['back', /(戻って|もどって|戻る|もどる|戻して|もどして|^前$|^まえ$|前に|前の手順|一つ前|ひとつ前|1つ前)/],
+    ['ingredients', /(材料|ざいりょう)/],
+    ['detail', /(詳しく|くわしく|こつ)/],
+    ['quiet', /(静かに|しずかに|黙って|だまって)/],
+    ['next', /^(はい|はーい|はいはい|おっけー|おーけー|ok|okay|次|つぎ|次へ|つぎへ|次に|next|進んで|すすんで|進む|すすむ)$/],
+    ['start', /(始め|はじめ|すたーと|開始|かいし)/],
+  ];
+  const HAI = /^(はい|はーい|はいはい)$/;
+  function classify(text) {
+    const t = norm(text);
+    if (!t) return null;
+    if (t.length > 14) return { cmd: null, t, why: '長い発話（会話とみなして無視）' };
+    for (const [cmd, re] of RULES) {
+      if (re.test(t)) {
+        if (cmd === 'next' && HAI.test(t) && !OPT.hai) return { cmd: null, t, why: '「はい」は設定でオフ' };
+        return { cmd, t };
+      }
+    }
+    return { cmd: null, t, why: '対象外の言葉' };
+  }
+
+  const CMD_LABEL = {
+    next: '次の手順へ', back: '前の手順へ', repeat: '読み直し', timerOn: 'タイマー開始', timerStop: 'タイマー停止',
+    remaining: '残り時間', ingredients: '材料を表示', detail: 'くわしく', quiet: '読み上げ停止', start: '調理開始',
+  };
+
+  function onHeard(raw, kind, alts) {
+    // 読み上げ中は自分の声を拾いやすいので、止める系の言葉だけ受け付ける
+    let res = classify(raw);
+    if ((!res || !res.cmd) && alts) { for (const a of alts.slice(1)) { const r2 = classify(a); if (r2 && r2.cmd) { res = r2; break; } } }
+    if (!res) return;
+    const at = { view: S.view, step: S.step + 1 };
+    const ringing = S.timers.some(t => t.state === 'ringing');
+    if (res.cmd && isSpeaking() && !['quiet', 'timerStop'].includes(res.cmd) && !(ringing && res.cmd === 'next')) {
+      res = { cmd: null, t: res.t, why: '読み上げ中のため無視' };
+    }
+    const applied = res.cmd ? run(res.cmd, 'voice') : false;
+    const hit = !!(res.cmd && applied !== false);
+    if (hit) { S.stats.voiceHit++; chimeOk(); }
+    else { S.stats.voiceMiss++; }
+    showHeard(raw, hit ? CMD_LABEL[res.cmd] : (res.why || (res.cmd ? 'この場面では使えません' : '対象外')), hit);
+    addLog(raw, hit ? CMD_LABEL[res.cmd] : (res.why || 'この場面では使えません'), hit, at);
+  }
+
+  let heardTimer = null;
+  function showHeard(raw, label, hit) {
+    const el = $('heard');
+    el.textContent = `「${raw}」→ ${label}`;
+    el.className = 'heard show ' + (hit ? 'hit' : 'miss');
+    clearTimeout(heardTimer); heardTimer = setTimeout(() => el.classList.remove('show'), 2600);
+  }
+  function addLog(raw, result, hit, at) {
+    const d = new Date();
+    S.log.unshift({ time: d.toTimeString().slice(0, 8), raw, result, hit, view: at.view, step: at.step });
+    if (S.log.length > 300) S.log.pop();
+    if (S.sheet === 'sheetLog') renderLog();
+  }
+
+  // ---------- 操作 ----------
+  function run(cmd, via) {
+    if (via === 'tap' && S.view === 'cook') S.stats.taps++;
+    const step = RECIPE.steps[S.step];
+
+    if (S.sheet === 'sheetIng' && ['next', 'back'].includes(cmd)) { closeSheet(); return true; }
+
+    if (S.view === 'prep') {
+      if (cmd === 'next' || cmd === 'start') { beginCooking(); return true; }
+      return false;
+    }
+    if (S.view === 'done') return false;
+
+    switch (cmd) {
+      case 'next': {
+        const ring = S.timers.find(t => t.state === 'ringing');
+        if (ring) {
+          stopTimer(ring);
+          // そのタイマーの手順にいるときは止めて次へ。別の手順なら止めるだけ。
+          if (ring.step !== S.step) { speak('タイマーを止めました。'); return true; }
+        }
+        if (S.step >= RECIPE.steps.length - 1) { finish(); return true; }
+        goStep(S.step + 1); return true;
+      }
+      case 'back':
+        if (S.step === 0) { speak('最初の手順です。'); return true; }
+        goStep(S.step - 1); return true;
+      case 'repeat':
+        readStep(true); return true;
+      case 'timerOn': {
+        if (!step.timer) { speak('この手順にはタイマーがありません。'); return false; }
+        const existing = S.timers.find(t => t.step === S.step && t.state !== 'done');
+        if (existing) { speak(`${existing.label}のタイマーは、あと${spokenTime(remainOf(existing))}です。`, true); return true; }
+        startTimer(S.step); return true;
+      }
+      case 'timerStop': {
+        const ring = S.timers.find(t => t.state === 'ringing');
+        if (ring) { stopTimer(ring); return true; }
+        if (isSpeaking()) { stopSpeaking(); return true; }
+        const mine = S.timers.find(t => t.step === S.step && t.state === 'running')
+          || [...S.timers].filter(t => t.state === 'running').sort((a, b) => a.endAt - b.endAt)[0];
+        if (mine) { stopTimer(mine); speak(`${mine.label}のタイマーを止めました。`, true); return true; }
+        return false;
+      }
+      case 'remaining': {
+        const running = S.timers.filter(t => t.state === 'running');
+        if (!running.length) { speak('動いているタイマーはありません。', true); return false; }
+        speak(running.map(t => `${t.label}、あと${spokenTime(remainOf(t))}`).join('。') + '。', true);
+        return true;
+      }
+      case 'ingredients':
+        openSheet('sheetIng');
+        speak(step.uses.length
+          ? 'この手順で使うのは、' + step.uses.map(id => { const g = RECIPE.ingredients.find(x => x.id === id); return `${g.name}、${spokenAmt(g.amount)}`; }).join('。') + '。'
+          : 'この手順で新しく使う材料はありません。', true);
+        return true;
+      case 'detail':
+        if (!step.tip) { speak('この手順の補足はありません。', true); return false; }
+        S.tipShown = true; render(); speak(step.tip, true); return true;
+      case 'quiet':
+        stopSpeaking(); return true;
+      case 'start':
+        return false;
+    }
+    return false;
+  }
+
+  function spokenTime(sec) {
+    sec = Math.max(0, Math.round(sec));
+    const m = Math.floor(sec / 60), s = sec % 60;
+    if (m && s) return `${m}分${s}秒`; if (m) return `${m}分`; return `${s}秒`;
+  }
+  const spokenAmt = (a) => a.replace('と1/2', 'と半分').replace('1/2本', '半分').replace('ml', 'ミリリットル').replace(/(\d)g$/, '$1グラム');
+
+  function beginCooking() {
+    S.view = 'cook'; S.step = 0; S.stats.startedAt = Date.now(); S.stats.endedAt = 0;
+    requestWakeLock();
+    render(); readStep(false);
+  }
+  function goStep(i) { S.step = i; S.tipShown = false; render(); readStep(false); }
+  function readStep(again) {
+    const st = RECIPE.steps[S.step];
+    speak((again ? '' : `手順${S.step + 1}。`) + st.speech, again);
+  }
+  function finish() {
+    S.view = 'done'; S.stats.endedAt = Date.now();
+    render(); speak('完成です。おつかれさまでした。', true);
+  }
+
+  // ---------- タイマー ----------
+  let tid = 0;
+  const remainOf = (t) => (t.endAt - Date.now()) / 1000;
+  function startTimer(stepIndex) {
+    const st = RECIPE.steps[stepIndex];
+    const t = { id: ++tid, step: stepIndex, label: st.timer.label, total: st.timer.seconds, endAt: Date.now() + st.timer.seconds * 1000, state: 'running', warned: false, doneHint: st.timer.doneHint };
+    S.timers = S.timers.filter(x => !(x.step === stepIndex));
+    S.timers.push(t);
+    speak(`${t.label}のタイマー、${spokenTime(t.total)}を始めました。`, true);
+    render();
+  }
+  function stopTimer(t) { t.state = 'done'; S.timers = S.timers.filter(x => x !== t); render(); }
+  let lastBurst = 0;
+  setInterval(() => {
+    let changed = false;
+    for (const t of S.timers) {
+      const r = remainOf(t);
+      if (t.state === 'running' && !t.warned && t.total > 120 && r <= 60) {
+        t.warned = true; tone(660, 0, 0.15); speak(`${t.label}、あと1分です。`, true);
+      }
+      if (t.state === 'running' && r <= 0) {
+        t.state = 'ringing'; changed = true; lastBurst = 0;
+        speak(`${t.label}のタイマーが終わりました。${t.doneHint || ''}`, true);
+      }
+    }
+    // 鳴りっぱなしにせず、間を空けて鳴らす（声を聞き取れるように）
+    if (S.timers.some(t => t.state === 'ringing') && !isSpeaking() && Date.now() - lastBurst > 3500) { alarmBurst(); lastBurst = Date.now(); }
+    renderTimers(); if (changed) render();
+  }, 250);
+
+  // ---------- 画面のスリープ防止 ----------
+  let wakeLock = null;
+  async function requestWakeLock() {
+    try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.view === 'cook') requestWakeLock(); });
+
+  // ---------- 描画 ----------
+  function render() {
+    const total = RECIPE.steps.length;
+    $('viewPrep').classList.toggle('hidden', S.view !== 'prep');
+    $('viewCook').classList.toggle('hidden', S.view !== 'cook');
+    $('viewDone').classList.toggle('hidden', S.view !== 'done');
+    $('cookControls').classList.toggle('hidden', S.view !== 'cook');
+    $('count').textContent = S.view === 'cook' ? `手順 ${S.step + 1} / ${total}` : '';
+    $('progress').style.width = S.view === 'cook' ? `${(S.step + 1) / total * 100}%` : (S.view === 'done' ? '100%' : '0');
+
+    if (S.view === 'cook') {
+      const st = RECIPE.steps[S.step];
+      $('stepMain').innerHTML = st.display;
+      $('stepSub').textContent = st.sub || '';
+      $('tipBox').classList.toggle('hidden', !(S.tipShown && st.tip));
+      $('tipText').textContent = st.tip || '';
+      $('btnDetail').disabled = !st.tip; $('btnDetail').style.opacity = st.tip ? 1 : .4;
+      $('btnNext').textContent = S.step === total - 1 ? '完成 ▶' : 'はい ▶';
+      const nx = RECIPE.steps[S.step + 1];
+      $('nextText').textContent = nx ? `次：${plain(nx.display)}` : '次：完成';
+      renderTimerCard();
+    }
+    if (S.view === 'done') renderStats($('stats'));
+    renderTimers(); renderMic();
+  }
+  function renderTimerCard() {
+    const st = RECIPE.steps[S.step];
+    const card = $('timerCard');
+    if (!st || !st.timer) { card.classList.add('hidden'); return; }
+    card.classList.remove('hidden');
+    const t = S.timers.find(x => x.step === S.step);
+    if (!t) {
+      $('timerBig').textContent = fmt(st.timer.seconds);
+      $('timerHint').textContent = '「タイマーオン」で開始';
+      $('btnTimer').textContent = '開始'; $('btnTimer').dataset.cmd = 'timerOn';
+    } else if (t.state === 'ringing') {
+      $('timerBig').textContent = '0:00';
+      $('timerHint').textContent = '終了！「はい」で止めて次へ';
+      $('btnTimer').textContent = '止める'; $('btnTimer').dataset.cmd = 'timerStop';
+    } else {
+      $('timerBig').textContent = fmt(remainOf(t));
+      $('timerHint').textContent = '計測中。先の手順へ進んでも大丈夫です';
+      $('btnTimer').textContent = '止める'; $('btnTimer').dataset.cmd = 'timerStop';
+    }
+  }
+  function renderTimers() {
+    const box = $('timers');
+    const list = S.timers.filter(t => t.state !== 'done');
+    box.innerHTML = '';
+    for (const t of list) {
+      const el = document.createElement('div');
+      el.className = 'tchip' + (t.state === 'ringing' ? ' ringing' : '');
+      el.innerHTML = `<span>${t.label} ${t.state === 'ringing' ? '終了' : fmt(remainOf(t))}</span>`;
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = '✕'; b.title = '止める';
+      b.onclick = () => { if (S.view === 'cook') S.stats.taps++; stopTimer(t); };
+      el.appendChild(b); box.appendChild(el);
+    }
+    if (S.view === 'cook') renderTimerCard();
+  }
+  function renderMic(reason) {
+    const dot = $('micDot');
+    dot.className = 'dot' + (S.micOn ? (isSpeaking() ? ' busy' : ' on') : '');
+    let st;
+    if (!S.micOn) st = wantMic ? (reason ? `マイク停止中（${reason}）` : 'マイク再接続中…') : 'マイクはまだオフです';
+    else if (isSpeaking()) st = '読み上げ中（「しずかに」で止まります）';
+    else st = '聞き取り中';
+    $('micState').textContent = st;
+    const words = S.view === 'prep' ? '「はい」「はじめ」で開始' :
+      ['はい', 'もどって', 'もういちど'].concat(RECIPE.steps[S.step] && RECIPE.steps[S.step].timer ? ['タイマーオン'] : [], S.timers.length ? ['あとなんぷん'] : []).join('・');
+    $('micWords').textContent = OPT.hai ? words : words.replace('はい', 'つぎ');
+  }
+  function renderStats(el) {
+    const s = S.stats;
+    const end = s.endedAt || Date.now();
+    const mins = s.startedAt ? Math.round((end - s.startedAt) / 60000) : 0;
+    const total = s.voiceHit + s.voiceMiss;
+    el.innerHTML = [
+      ['画面タッチ（調理中）', s.taps + '回'],
+      ['声で操作できた回数', s.voiceHit + '回'],
+      ['反応しなかった発話', s.voiceMiss + '回'],
+      ['声の成功率', total ? Math.round(s.voiceHit / total * 100) + '%' : '—'],
+      ['所要時間', mins + '分'],
+      ['認識の方式', S.engine === 'web-speech' ? 'ブラウザ' : S.engine === 'web-speech-ios' ? 'Safari（iPhone向け）' : S.engine === 'claude-dictation' ? 'Claude音声入力' : '未使用'],
+    ].map(([k, v]) => `<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`).join('');
+  }
+  function renderLog() {
+    renderStats($('logStats'));
+    $('engineInfo').textContent = `認識方式: ${S.engine}　/　ブラウザ音声認識: ${NativeSR ? 'あり' : 'なし'}　/　読み上げ: ${'speechSynthesis' in window ? (jaVoice ? jaVoice.name : '日本語音声なし') : 'なし'}`;
+    $('logList').innerHTML = S.log.map(l => `<div><span>${l.time}</span><span>${escapeHtml(l.raw)}<br><small>${l.view === 'cook' ? '手順' + l.step : l.view}</small></span><span class="${l.hit ? 'hit' : 'miss'}">${escapeHtml(l.result)}</span></div>`).join('') || '<p class="note">まだ記録はありません。</p>';
+  }
+  const escapeHtml = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function logText() {
+    const s = S.stats, total = s.voiceHit + s.voiceMiss;
+    const head = `しゃべる料理ナビ 試作ログ\n認識方式: ${S.engine}\n画面タッチ: ${s.taps}回 / 声で操作: ${s.voiceHit}回 / 反応しなかった発話: ${s.voiceMiss}回 / 成功率: ${total ? Math.round(s.voiceHit / total * 100) + '%' : '-'}\n`;
+    return head + S.log.slice().reverse().map(l => `${l.time}\t手順${l.step}\t${l.raw}\t${l.result}`).join('\n');
+  }
+  async function copy(text, btn) {
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'コピーしました'; }
+    catch (e) { btn.textContent = 'コピーできませんでした'; }
+    setTimeout(() => { btn.textContent = btn.dataset.label; }, 1800);
+  }
+
+  function renderEnv() {
+    const w = $('envWarn');
+    if (!NativeSR && !dict) {
+      w.textContent = 'このブラウザでは音声認識が使えません。PCかAndroidのChrome、またはiPhoneのSafariで開いてください。ボタン操作は使えます。';
+      w.classList.remove('hidden');
+    } else w.classList.add('hidden');
+  }
+
+  function openSheet(id) {
+    S.sheet = id; $(id).classList.add('open');
+    if (id === 'sheetIng') {
+      const uses = (RECIPE.steps[S.step] || {}).uses || [];
+      $('ingList').innerHTML = RECIPE.ingredients.map(g => `<li class="${uses.includes(g.id) && S.view === 'cook' ? 'hl' : ''}"><span>${g.name}</span><span class="amt">${g.amount}</span></li>`).join('');
+    }
+    if (id === 'sheetLog') renderLog();
+  }
+  function closeSheet() { if (S.sheet) $(S.sheet).classList.remove('open'); S.sheet = null; }
+
+  // ---------- イベント ----------
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cmd]');
+    if (b) { audio(); run(b.dataset.cmd, 'tap'); return; }
+    const c = e.target.closest('[data-close]');
+    if (c) { closeSheet(); return; }
+    if (e.target.classList.contains('sheet')) closeSheet();
+  });
+  $('btnStart').addEventListener('click', () => {
+    audio();
+    if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(''); speechSynthesis.speak(u); } // iOSで読み上げを有効にする
+    startMic(); beginCooking();
+  });
+  $('btnMicRetry').addEventListener('click', () => { audio(); startMic(); });
+  $('btnLog').addEventListener('click', () => openSheet('sheetLog'));
+  $('btnSim').addEventListener('click', () => { const v = $('simInput').value.trim(); if (v) { onHeard(v, 'sim'); $('simInput').value = ''; } });
+  $('simInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnSim').click(); });
+  for (const id of ['btnCopyLog', 'btnCopyDone']) { $(id).dataset.label = $(id).textContent; $(id).addEventListener('click', (e) => copy(logText(), e.currentTarget)); }
+  $('btnResetLog').addEventListener('click', () => { S.log = []; Object.assign(S.stats, { voiceHit: 0, voiceMiss: 0, taps: 0 }); renderLog(); });
+  $('btnAgain').addEventListener('click', () => { S.view = 'prep'; S.step = 0; S.timers = []; render(); });
+
+  $('optHai').checked = OPT.hai; $('optSpeak').checked = OPT.speak; $('optRate').value = OPT.rate; $('rateVal').textContent = Number(OPT.rate).toFixed(1);
+  $('optHai').onchange = (e) => { OPT.hai = e.target.checked; saveOpt(); renderMic(); };
+  $('optSpeak').onchange = (e) => { OPT.speak = e.target.checked; saveOpt(); };
+  $('optRate').oninput = (e) => { OPT.rate = Number(e.target.value); $('rateVal').textContent = OPT.rate.toFixed(1); saveOpt(); };
+
+  // 準備画面
+  $('prepList').innerHTML = RECIPE.ingredients.map(g => `<li><input type="checkbox" aria-label="${g.name}"><span>${g.name}</span><span class="amt">${g.amount}</span></li>`).join('');
+  $('cmdTable').innerHTML = [
+    ['はい（つぎ）', '次の手順へ。タイマーが鳴っていれば止める'], ['もどって', '前の手順へ'], ['もういちど', '今の手順を読み直す'],
+    ['タイマーオン', 'その手順の時間で計り始める'], ['タイマーとめて', 'タイマーを止める'], ['あとなんぷん', '残り時間を聞く'],
+    ['ざいりょう', 'この手順で使う材料'], ['くわしく', 'コツを聞く'], ['しずかに', '読み上げを止める'],
+  ].map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+
+  renderEnv(); render();
+
+  // 自動テスト用（画面には出ない）
+  window.__navi = { S, run, onHeard, classify, startTimer, RECIPE };
+})();
+</script>
+</body>
+</html>
